@@ -3,93 +3,151 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSession, signIn, signOut } from "next-auth/react";
-import { LANGUAGES, type LanguageCode } from "@/lib/openai";
+import { LANGUAGES, TARGET_COUNTRIES, type LanguageCode, type TargetCountry } from "@/lib/openai";
 import type { OptimizeResult } from "@/lib/openai";
 import ResultTabs from "@/components/ResultTabs";
+import FeedbackWidget from "@/components/FeedbackWidget";
+
+function EmailCapture({ onSubmit }: { onSubmit: (email: string) => void }) {
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.includes("@")) { setError("Insira um email válido."); return; }
+    localStorage.setItem("jobabroad:email", email);
+    onSubmit(email);
+  };
+
+  return (
+    <div className="mt-8 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 p-8">
+      <div className="max-w-md mx-auto text-center">
+        <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M2 4h14v11H2z" stroke="#6366f1" strokeWidth="1.4" strokeLinejoin="round"/>
+            <path d="M2 4l7 7 7-7" stroke="#6366f1" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <h3 className="text-base font-semibold text-zinc-900">Seus resultados estão prontos</h3>
+        <p className="mt-1.5 text-sm text-zinc-500">
+          Insira seu email para receber seu CV otimizado e salvar seus resultados.
+        </p>
+        <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-3 sm:flex-row">
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setError(""); }}
+            placeholder="seu@email.com"
+            className="flex-1 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+          />
+          <button
+            type="submit"
+            className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
+          >
+            Ver resultados
+          </button>
+        </form>
+        {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+        <button
+          onClick={() => onSubmit("")}
+          className="mt-3 text-xs text-zinc-400 hover:text-zinc-600 transition-colors"
+        >
+          Pular por agora
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function OptimizerPage() {
   const { data: session } = useSession();
   const [cv, setCv] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [language, setLanguage] = useState<LanguageCode>("pt");
+  const [targetCountry, setTargetCountry] = useState<TargetCountry>("Remote / Global");
   const [result, setResult] = useState<OptimizeResult | null>(null);
+  const [pendingResult, setPendingResult] = useState<OptimizeResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Restore state from localStorage on mount
   useEffect(() => {
     const savedCv = localStorage.getItem("jobabroad:cv");
     const savedJob = localStorage.getItem("jobabroad:job");
     const savedLang = localStorage.getItem("jobabroad:lang") as LanguageCode | null;
+    const savedCountry = localStorage.getItem("jobabroad:country") as TargetCountry | null;
     if (savedCv) setCv(savedCv);
     if (savedJob) setJobDescription(savedJob);
     if (savedLang && savedLang in LANGUAGES) setLanguage(savedLang);
+    if (savedCountry && (TARGET_COUNTRIES as readonly string[]).includes(savedCountry)) setTargetCountry(savedCountry);
   }, []);
 
-  const handleCvChange = (value: string) => {
-    setCv(value);
-    localStorage.setItem("jobabroad:cv", value);
-  };
+  const handleCvChange = (value: string) => { setCv(value); localStorage.setItem("jobabroad:cv", value); };
+  const handleJobChange = (value: string) => { setJobDescription(value); localStorage.setItem("jobabroad:job", value); };
+  const handleLanguageChange = (code: LanguageCode) => { setLanguage(code); localStorage.setItem("jobabroad:lang", code); };
+  const handleCountryChange = (c: TargetCountry) => { setTargetCountry(c); localStorage.setItem("jobabroad:country", c); };
 
-  const handleJobChange = (value: string) => {
-    setJobDescription(value);
-    localStorage.setItem("jobabroad:job", value);
-  };
-
-  const handleLanguageChange = (code: LanguageCode) => {
-    setLanguage(code);
-    localStorage.setItem("jobabroad:lang", code);
-  };
-
-  const submitForm = useCallback(async (cvVal: string, jobVal: string, langVal: LanguageCode) => {
+  const submitForm = useCallback(async (cvVal: string, jobVal: string, langVal: LanguageCode, countryVal: TargetCountry) => {
     setError("");
     setResult(null);
+    setPendingResult(null);
     setLoading(true);
 
     const res = await fetch("/api/optimize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cv: cvVal, jobDescription: jobVal, language: langVal }),
+      body: JSON.stringify({ cv: cvVal, jobDescription: jobVal, language: langVal, targetCountry: countryVal }),
     });
 
     const data = await res.json();
     setLoading(false);
 
-    if (!res.ok) {
-      setError(data.error ?? "Erro inesperado. Tente novamente.");
-      return;
-    }
+    if (!res.ok) { setError(data.error ?? "Erro inesperado. Tente novamente."); return; }
 
-    setResult(data as OptimizeResult);
-    setTimeout(() => {
-      document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
+    const emailAlreadyCaptured = localStorage.getItem("jobabroad:email");
+    if (emailAlreadyCaptured) {
+      setResult(data as OptimizeResult);
+      setTimeout(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }), 100);
+    } else {
+      setPendingResult(data as OptimizeResult);
+      setTimeout(() => document.getElementById("email-capture")?.scrollIntoView({ behavior: "smooth" }), 100);
+    }
   }, []);
 
-  // Auto-submit after Google login redirect
   useEffect(() => {
     if (!session) return;
     const pending = localStorage.getItem("jobabroad:pending_submit");
     if (!pending) return;
     localStorage.removeItem("jobabroad:pending_submit");
-
     const savedCv = localStorage.getItem("jobabroad:cv") ?? "";
     const savedJob = localStorage.getItem("jobabroad:job") ?? "";
     const savedLang = (localStorage.getItem("jobabroad:lang") as LanguageCode) ?? "pt";
-
+    const savedCountry = (localStorage.getItem("jobabroad:country") as TargetCountry) ?? "Remote / Global";
     if (savedCv.trim().length > 50 && savedJob.trim().length > 50) {
-      submitForm(savedCv, savedJob, savedLang);
+      submitForm(savedCv, savedJob, savedLang, savedCountry);
     }
   }, [session, submitForm]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await submitForm(cv, jobDescription, language);
+    await submitForm(cv, jobDescription, language, targetCountry);
   };
 
   const handleGoogleSignIn = () => {
     localStorage.setItem("jobabroad:pending_submit", "1");
     signIn("google");
+  };
+
+  const handleEmailSubmit = (email: string) => {
+    if (email) {
+      fetch(process.env.NEXT_PUBLIC_SHEETBEST_URL ?? "", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, created_at: new Date().toISOString(), source: "email_capture" }),
+      }).catch(() => {});
+    }
+    setResult(pendingResult);
+    setPendingResult(null);
+    setTimeout(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }), 100);
   };
 
   const canSubmit = cv.trim().length > 50 && jobDescription.trim().length > 50;
@@ -100,10 +158,7 @@ export default function OptimizerPage() {
       <nav className="sticky top-0 z-10 border-b border-zinc-200 bg-white/80 backdrop-blur-sm px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Link
-              href="/"
-              className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-700 transition-colors"
-            >
+            <Link href="/" className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-700 transition-colors">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                 <path d="M10 7H2M5 3L1 7l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
@@ -113,7 +168,8 @@ export default function OptimizerPage() {
             <div className="flex items-center gap-2">
               <div className="w-5 h-5 rounded-md bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center">
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                  <path d="M5 1L6.3 3.8L9.5 4.3L7 6.8L7.6 10L5 8.5L2.4 10L3 6.8L0.5 4.3L3.7 3.8L5 1Z" fill="white"/>
+                  <circle cx="5" cy="5" r="3.5" stroke="white" strokeWidth="1.2"/>
+                  <path d="M5 1.5C5 1.5 3.5 3 3.5 5s1.5 3.5 1.5 3.5M5 1.5c0 0 1.5 1.5 1.5 3.5S5 8.5 5 8.5M1.5 5h7" stroke="white" strokeWidth="1.2" strokeLinecap="round"/>
                 </svg>
               </div>
               <span className="text-sm font-semibold text-zinc-900">JobAbroad.pro</span>
@@ -122,28 +178,19 @@ export default function OptimizerPage() {
           {session?.user && (
             <div className="flex items-center gap-3">
               <span className="hidden text-xs text-zinc-500 sm:block">{session.user.email}</span>
-              <button
-                onClick={() => signOut()}
-                className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
-              >
-                Sair
-              </button>
+              <button onClick={() => signOut()} className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors">Sair</button>
             </div>
           )}
         </div>
       </nav>
 
       <div className="flex-1 px-6 py-10 max-w-5xl mx-auto w-full">
-        {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-zinc-900">Otimizar currículo</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Preencha os dois campos abaixo e clique em gerar.
-          </p>
+          <h1 className="text-2xl font-bold text-zinc-900">Otimize seu currículo</h1>
+          <p className="mt-1 text-sm text-zinc-500">Cole seu CV, a descrição da vaga e selecione o país de destino.</p>
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* Inputs */}
           <div className="grid gap-5 sm:grid-cols-2">
             {/* CV */}
             <div className="flex flex-col gap-2.5">
@@ -166,19 +213,13 @@ export default function OptimizerPage() {
                       Salvo
                     </span>
                   )}
-                  <span className={`text-xs ${cv.length > 9000 ? "text-red-400" : "text-zinc-400"}`}>
-                    {cv.length.toLocaleString()}/10.000
-                  </span>
+                  <span className={`text-xs ${cv.length > 9000 ? "text-red-400" : "text-zinc-400"}`}>{cv.length.toLocaleString()}/10,000</span>
                 </div>
               </div>
-              <textarea
-                id="cv"
-                value={cv}
-                onChange={(e) => handleCvChange(e.target.value)}
-                maxLength={10000}
+              <textarea id="cv" value={cv} onChange={(e) => handleCvChange(e.target.value)} maxLength={10000}
                 placeholder="Cole aqui o texto completo do seu currículo..."
                 rows={18}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3.5 text-sm text-zinc-800 placeholder-zinc-300 shadow-sm outline-none ring-0 transition-all focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 resize-none"
+                className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3.5 text-sm text-zinc-800 placeholder-zinc-300 shadow-sm outline-none transition-all focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100 resize-none"
               />
             </div>
 
@@ -194,19 +235,50 @@ export default function OptimizerPage() {
                   </span>
                   Descrição da vaga
                 </label>
-                <span className={`text-xs ${jobDescription.length > 4500 ? "text-red-400" : "text-zinc-400"}`}>
-                  {jobDescription.length.toLocaleString()}/5.000
-                </span>
+                <span className={`text-xs ${jobDescription.length > 4500 ? "text-red-400" : "text-zinc-400"}`}>{jobDescription.length.toLocaleString()}/5,000</span>
               </div>
-              <textarea
-                id="job"
-                value={jobDescription}
-                onChange={(e) => handleJobChange(e.target.value)}
-                maxLength={5000}
+              <textarea id="job" value={jobDescription} onChange={(e) => handleJobChange(e.target.value)} maxLength={5000}
                 placeholder="Cole aqui a descrição completa da vaga..."
                 rows={18}
-                className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3.5 text-sm text-zinc-800 placeholder-zinc-300 shadow-sm outline-none ring-0 transition-all focus:border-violet-300 focus:ring-2 focus:ring-violet-100 resize-none"
+                className="w-full rounded-xl border border-zinc-200 bg-white px-4 py-3.5 text-sm text-zinc-800 placeholder-zinc-300 shadow-sm outline-none transition-all focus:border-violet-300 focus:ring-2 focus:ring-violet-100 resize-none"
               />
+            </div>
+          </div>
+
+          {/* Target country */}
+          <div className="mt-5 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4">
+            <label htmlFor="country" className="flex items-center gap-2 text-sm font-medium text-zinc-700 shrink-0">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+                <circle cx="7.5" cy="7.5" r="6.5" stroke="#6366f1" strokeWidth="1.3"/>
+                <path d="M7.5 1C7.5 1 5 4 5 7.5s2.5 6.5 2.5 6.5M7.5 1c0 0 2.5 3 2.5 6.5S7.5 14 7.5 14M1 7.5h13" stroke="#6366f1" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+              País de destino
+            </label>
+            <select
+              id="country"
+              value={targetCountry}
+              onChange={(e) => handleCountryChange(e.target.value as TargetCountry)}
+              className="rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm text-zinc-800 shadow-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+            >
+              {TARGET_COUNTRIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+
+            {/* Language */}
+            <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 shrink-0 sm:ml-4">
+              Idioma do resultado
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {(Object.entries(LANGUAGES) as [LanguageCode, string][]).map(([code, name]) => (
+                <button key={code} type="button" onClick={() => handleLanguageChange(code)}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                    language === code
+                      ? "border-indigo-300 bg-indigo-50 text-indigo-700 shadow-sm"
+                      : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
+                  }`}
+                >{name}</button>
+              ))}
             </div>
           </div>
 
@@ -221,40 +293,11 @@ export default function OptimizerPage() {
             </div>
           )}
 
-          {/* Language selector */}
-          <div className="mt-5 flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm font-medium text-zinc-700">
-              <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-                <circle cx="7.5" cy="7.5" r="6.5" stroke="#6366f1" strokeWidth="1.3"/>
-                <path d="M7.5 1C7.5 1 5 4 5 7.5s2.5 6.5 2.5 6.5M7.5 1c0 0 2.5 3 2.5 6.5S7.5 14 7.5 14M1 7.5h13" stroke="#6366f1" strokeWidth="1.3" strokeLinecap="round"/>
-              </svg>
-              Idioma do output
-            </label>
-            <div className="flex flex-wrap gap-2">
-              {(Object.entries(LANGUAGES) as [LanguageCode, string][]).map(([code, name]) => (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => handleLanguageChange(code)}
-                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
-                    language === code
-                      ? "border-indigo-300 bg-indigo-50 text-indigo-700 shadow-sm"
-                      : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
-                  }`}
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Submit */}
           <div className="mt-6 flex items-center gap-4">
             {session ? (
-              <button
-                type="submit"
-                disabled={!canSubmit || loading}
-                className="inline-flex items-center gap-2.5 rounded-xl bg-zinc-900 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-zinc-900/15 transition-all hover:bg-zinc-700 hover:shadow-xl hover:shadow-zinc-900/20 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:translate-y-0"
+              <button type="submit" disabled={!canSubmit || loading}
+                className="inline-flex items-center gap-2.5 rounded-xl bg-zinc-900 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-zinc-900/15 transition-all hover:bg-zinc-700 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:translate-y-0"
               >
                 {loading ? (
                   <>
@@ -274,11 +317,8 @@ export default function OptimizerPage() {
                 )}
               </button>
             ) : (
-              <button
-                type="button"
-                disabled={!canSubmit}
-                onClick={handleGoogleSignIn}
-                className="inline-flex items-center gap-2.5 rounded-xl bg-white border border-zinc-200 px-7 py-3.5 text-sm font-semibold text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 hover:shadow-md hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:translate-y-0"
+              <button type="button" disabled={!canSubmit} onClick={handleGoogleSignIn}
+                className="inline-flex items-center gap-2.5 rounded-xl bg-white border border-zinc-200 px-7 py-3.5 text-sm font-semibold text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:translate-y-0"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                   <path d="M15.68 8.18c0-.57-.05-1.11-.14-1.64H8v3.1h4.3a3.68 3.68 0 0 1-1.6 2.42v2h2.58c1.51-1.39 2.4-3.44 2.4-5.88z" fill="#4285F4"/>
@@ -289,18 +329,22 @@ export default function OptimizerPage() {
                 Entrar com Google para continuar
               </button>
             )}
-            {!canSubmit && (
-              <p className="text-xs text-zinc-400">
-                Preencha os dois campos para continuar
-              </p>
-            )}
+            {!canSubmit && <p className="text-xs text-zinc-400">Preencha os dois campos para continuar</p>}
           </div>
         </form>
+
+        {/* Email capture */}
+        {pendingResult && (
+          <div id="email-capture">
+            <EmailCapture onSubmit={handleEmailSubmit} />
+          </div>
+        )}
 
         {/* Results */}
         {result && (
           <div id="results">
             <ResultTabs result={result} />
+            <FeedbackWidget />
           </div>
         )}
       </div>

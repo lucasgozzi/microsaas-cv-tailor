@@ -9,9 +9,9 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "JobAbroad.pro — Seu CV pronto para trabalhar fora",
+  title: "JobAbroad.pro — Seja contratado no exterior com um currículo otimizado por IA",
   description:
-    "Cansado da instabilidade? Transforme seu currículo para o padrão internacional em segundos. A IA adapta, reescreve e cria sua cover letter para vagas no exterior.",
+    "Otimize seu currículo para as expectativas de recrutadores, filtros ATS e padrões de contratação de cada país. Currículo, cover letter e análise de compatibilidade em segundos.",
 };
 
 export default function RootLayout({
