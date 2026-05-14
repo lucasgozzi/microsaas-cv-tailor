@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { OptimizeResult } from "@/lib/openai";
+import { printAsPdf } from "@/lib/generatePdf";
 import ScoreRing from "./ScoreRing";
 
 interface Props {
@@ -74,6 +75,21 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function DownloadButton({ title, content }: { title: string; content: string }) {
+  return (
+    <button
+      onClick={() => printAsPdf(title, content)}
+      className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-500 shadow-sm transition-all hover:border-zinc-300 hover:text-zinc-800 active:scale-95"
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M6 1v6M3.5 5L6 7.5 8.5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M1.5 9.5h9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+      </svg>
+      Baixar PDF
+    </button>
+  );
+}
+
 export default function ResultTabs({ result }: Props) {
   const [active, setActive] = useState<TabId>("cv");
 
@@ -124,7 +140,13 @@ export default function ResultTabs({ result }: Props) {
               <p className="text-xs text-zinc-400">
                 {active === "cv" ? "Currículo reescrito para ATS" : "Carta de apresentação personalizada"}
               </p>
-              <CopyButton text={active === "cv" ? result.optimizedCV : result.coverLetter} />
+              <div className="flex items-center gap-2">
+                <DownloadButton
+                  title={active === "cv" ? "CV Otimizado" : "Cover Letter"}
+                  content={active === "cv" ? result.optimizedCV : result.coverLetter}
+                />
+                <CopyButton text={active === "cv" ? result.optimizedCV : result.coverLetter} />
+              </div>
             </div>
             <pre className="whitespace-pre-wrap rounded-xl border border-zinc-100 bg-zinc-50 px-5 py-4 text-sm leading-relaxed text-zinc-700 font-sans">
               {active === "cv" ? result.optimizedCV : result.coverLetter}

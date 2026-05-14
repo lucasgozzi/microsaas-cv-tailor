@@ -1,19 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useSession, signIn, signOut } from "next-auth/react";
+import { LANGUAGES, type LanguageCode } from "@/lib/openai";
 import type { OptimizeResult } from "@/lib/openai";
 import ResultTabs from "@/components/ResultTabs";
 
 export default function OptimizerPage() {
+  const { data: session } = useSession();
   const [cv, setCv] = useState("");
   const [jobDescription, setJobDescription] = useState("");
+  const [language, setLanguage] = useState<LanguageCode>("pt");
   const [result, setResult] = useState<OptimizeResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Restore state from localStorage on mount
+  useEffect(() => {
+    const savedCv = localStorage.getItem("jobabroad:cv");
+    const savedJob = localStorage.getItem("jobabroad:job");
+    const savedLang = localStorage.getItem("jobabroad:lang") as LanguageCode | null;
+    if (savedCv) setCv(savedCv);
+    if (savedJob) setJobDescription(savedJob);
+    if (savedLang && savedLang in LANGUAGES) setLanguage(savedLang);
+  }, []);
+
+  const handleCvChange = (value: string) => {
+    setCv(value);
+    localStorage.setItem("jobabroad:cv", value);
+  };
+
+  const handleJobChange = (value: string) => {
+    setJobDescription(value);
+    localStorage.setItem("jobabroad:job", value);
+  };
+
+  const handleLanguageChange = (code: LanguageCode) => {
+    setLanguage(code);
+    localStorage.setItem("jobabroad:lang", code);
+  };
+
+  const submitForm = useCallback(async (cvVal: string, jobVal: string, langVal: LanguageCode) => {
     setError("");
     setResult(null);
     setLoading(true);
@@ -21,7 +49,7 @@ export default function OptimizerPage() {
     const res = await fetch("/api/optimize", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cv, jobDescription }),
+      body: JSON.stringify({ cv: cvVal, jobDescription: jobVal, language: langVal }),
     });
 
     const data = await res.json();
@@ -33,10 +61,35 @@ export default function OptimizerPage() {
     }
 
     setResult(data as OptimizeResult);
-
     setTimeout(() => {
       document.getElementById("results")?.scrollIntoView({ behavior: "smooth" });
     }, 100);
+  }, []);
+
+  // Auto-submit after Google login redirect
+  useEffect(() => {
+    if (!session) return;
+    const pending = localStorage.getItem("jobabroad:pending_submit");
+    if (!pending) return;
+    localStorage.removeItem("jobabroad:pending_submit");
+
+    const savedCv = localStorage.getItem("jobabroad:cv") ?? "";
+    const savedJob = localStorage.getItem("jobabroad:job") ?? "";
+    const savedLang = (localStorage.getItem("jobabroad:lang") as LanguageCode) ?? "pt";
+
+    if (savedCv.trim().length > 50 && savedJob.trim().length > 50) {
+      submitForm(savedCv, savedJob, savedLang);
+    }
+  }, [session, submitForm]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await submitForm(cv, jobDescription, language);
+  };
+
+  const handleGoogleSignIn = () => {
+    localStorage.setItem("jobabroad:pending_submit", "1");
+    signIn("google");
   };
 
   const canSubmit = cv.trim().length > 50 && jobDescription.trim().length > 50;
@@ -45,25 +98,38 @@ export default function OptimizerPage() {
     <main className="min-h-screen flex flex-col bg-zinc-50">
       {/* Nav */}
       <nav className="sticky top-0 z-10 border-b border-zinc-200 bg-white/80 backdrop-blur-sm px-6 py-4">
-        <div className="max-w-5xl mx-auto flex items-center gap-4">
-          <Link
-            href="/"
-            className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-700 transition-colors"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M10 7H2M5 3L1 7l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Voltar
-          </Link>
-          <div className="h-4 w-px bg-zinc-200" />
-          <div className="flex items-center gap-2">
-            <div className="w-5 h-5 rounded-md bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center">
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                <path d="M5 1L6.3 3.8L9.5 4.3L7 6.8L7.6 10L5 8.5L2.4 10L3 6.8L0.5 4.3L3.7 3.8L5 1Z" fill="white"/>
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Link
+              href="/"
+              className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-700 transition-colors"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M10 7H2M5 3L1 7l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
+              Voltar
+            </Link>
+            <div className="h-4 w-px bg-zinc-200" />
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded-md bg-gradient-to-br from-indigo-500 to-blue-500 flex items-center justify-center">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <path d="M5 1L6.3 3.8L9.5 4.3L7 6.8L7.6 10L5 8.5L2.4 10L3 6.8L0.5 4.3L3.7 3.8L5 1Z" fill="white"/>
+                </svg>
+              </div>
+              <span className="text-sm font-semibold text-zinc-900">JobAbroad.pro</span>
             </div>
-            <span className="text-sm font-semibold text-zinc-900">CV Optimizer AI</span>
           </div>
+          {session?.user && (
+            <div className="flex items-center gap-3">
+              <span className="hidden text-xs text-zinc-500 sm:block">{session.user.email}</span>
+              <button
+                onClick={() => signOut()}
+                className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
+              >
+                Sair
+              </button>
+            </div>
+          )}
         </div>
       </nav>
 
@@ -91,14 +157,24 @@ export default function OptimizerPage() {
                   </span>
                   Seu CV
                 </label>
-                <span className={`text-xs ${cv.length > 9000 ? "text-red-400" : "text-zinc-400"}`}>
-                  {cv.length.toLocaleString()}/10.000
-                </span>
+                <div className="flex items-center gap-3">
+                  {cv.length > 0 && (
+                    <span className="flex items-center gap-1 text-xs text-emerald-500">
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                        <path d="M1.5 5l2.5 2.5 4.5-4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      Salvo
+                    </span>
+                  )}
+                  <span className={`text-xs ${cv.length > 9000 ? "text-red-400" : "text-zinc-400"}`}>
+                    {cv.length.toLocaleString()}/10.000
+                  </span>
+                </div>
               </div>
               <textarea
                 id="cv"
                 value={cv}
-                onChange={(e) => setCv(e.target.value)}
+                onChange={(e) => handleCvChange(e.target.value)}
                 maxLength={10000}
                 placeholder="Cole aqui o texto completo do seu currículo..."
                 rows={18}
@@ -125,7 +201,7 @@ export default function OptimizerPage() {
               <textarea
                 id="job"
                 value={jobDescription}
-                onChange={(e) => setJobDescription(e.target.value)}
+                onChange={(e) => handleJobChange(e.target.value)}
                 maxLength={5000}
                 placeholder="Cole aqui a descrição completa da vaga..."
                 rows={18}
@@ -145,30 +221,74 @@ export default function OptimizerPage() {
             </div>
           )}
 
+          {/* Language selector */}
+          <div className="mt-5 flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-zinc-700">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+                <circle cx="7.5" cy="7.5" r="6.5" stroke="#6366f1" strokeWidth="1.3"/>
+                <path d="M7.5 1C7.5 1 5 4 5 7.5s2.5 6.5 2.5 6.5M7.5 1c0 0 2.5 3 2.5 6.5S7.5 14 7.5 14M1 7.5h13" stroke="#6366f1" strokeWidth="1.3" strokeLinecap="round"/>
+              </svg>
+              Idioma do output
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {(Object.entries(LANGUAGES) as [LanguageCode, string][]).map(([code, name]) => (
+                <button
+                  key={code}
+                  type="button"
+                  onClick={() => handleLanguageChange(code)}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                    language === code
+                      ? "border-indigo-300 bg-indigo-50 text-indigo-700 shadow-sm"
+                      : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
+                  }`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Submit */}
           <div className="mt-6 flex items-center gap-4">
-            <button
-              type="submit"
-              disabled={!canSubmit || loading}
-              className="inline-flex items-center gap-2.5 rounded-xl bg-zinc-900 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-zinc-900/15 transition-all hover:bg-zinc-700 hover:shadow-xl hover:shadow-zinc-900/20 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:translate-y-0"
-            >
-              {loading ? (
-                <>
-                  <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-                  </svg>
-                  Otimizando com IA...
-                </>
-              ) : (
-                <>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M8 1.5L9.8 5.7L14.5 6.5L11 9.9L11.8 14.5L8 12.3L4.2 14.5L5 9.9L1.5 6.5L6.2 5.7L8 1.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
-                  </svg>
-                  Gerar CV otimizado
-                </>
-              )}
-            </button>
+            {session ? (
+              <button
+                type="submit"
+                disabled={!canSubmit || loading}
+                className="inline-flex items-center gap-2.5 rounded-xl bg-zinc-900 px-7 py-3.5 text-sm font-semibold text-white shadow-lg shadow-zinc-900/15 transition-all hover:bg-zinc-700 hover:shadow-xl hover:shadow-zinc-900/20 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:translate-y-0"
+              >
+                {loading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                    </svg>
+                    Otimizando com IA...
+                  </>
+                ) : (
+                  <>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                      <path d="M8 1.5L9.8 5.7L14.5 6.5L11 9.9L11.8 14.5L8 12.3L4.2 14.5L5 9.9L1.5 6.5L6.2 5.7L8 1.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/>
+                    </svg>
+                    Gerar CV otimizado
+                  </>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={!canSubmit}
+                onClick={handleGoogleSignIn}
+                className="inline-flex items-center gap-2.5 rounded-xl bg-white border border-zinc-200 px-7 py-3.5 text-sm font-semibold text-zinc-700 shadow-sm transition-all hover:bg-zinc-50 hover:shadow-md hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:translate-y-0"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <path d="M15.68 8.18c0-.57-.05-1.11-.14-1.64H8v3.1h4.3a3.68 3.68 0 0 1-1.6 2.42v2h2.58c1.51-1.39 2.4-3.44 2.4-5.88z" fill="#4285F4"/>
+                  <path d="M8 16c2.16 0 3.97-.72 5.3-1.94l-2.58-2a4.8 4.8 0 0 1-7.14-2.52H.96v2.06A8 8 0 0 0 8 16z" fill="#34A853"/>
+                  <path d="M3.58 9.54A4.82 4.82 0 0 1 3.33 8c0-.54.09-1.06.25-1.54V4.4H.96A8.01 8.01 0 0 0 0 8c0 1.29.31 2.51.96 3.6l2.62-2.06z" fill="#FBBC05"/>
+                  <path d="M8 3.18c1.22 0 2.31.42 3.17 1.24l2.37-2.37A7.94 7.94 0 0 0 8 0 8 8 0 0 0 .96 4.4l2.62 2.06A4.77 4.77 0 0 1 8 3.18z" fill="#EA4335"/>
+                </svg>
+                Entrar com Google para continuar
+              </button>
+            )}
             {!canSubmit && (
               <p className="text-xs text-zinc-400">
                 Preencha os dois campos para continuar

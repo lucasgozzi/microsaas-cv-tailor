@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+import Providers from "@/components/Providers";
 import "./globals.css";
 
 const geist = Geist({
@@ -8,9 +9,9 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "CV Optimizer AI — Otimize seu currículo com IA",
+  title: "JobAbroad.pro — Seu CV pronto para trabalhar fora",
   description:
-    "Cole seu CV e a descrição da vaga. A IA reescreve seu currículo, cria uma cover letter e dá um score de compatibilidade em segundos.",
+    "Cansado da instabilidade? Transforme seu currículo para o padrão internacional em segundos. A IA adapta, reescreve e cria sua cover letter para vagas no exterior.",
 };
 
 export default function RootLayout({
@@ -19,7 +20,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR" className={`${geist.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-white text-zinc-900">
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
