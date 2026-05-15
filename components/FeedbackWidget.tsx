@@ -15,17 +15,10 @@ export default function FeedbackWidget() {
   const [submitted, setSubmitted] = useState(false);
 
   const handleSubmit = () => {
-    const email = localStorage.getItem("jobabroad:email") ?? "";
-    fetch(process.env.NEXT_PUBLIC_SHEETBEST_URL ?? "", {
+    fetch("/api/feedback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email,
-        feedback_rating: selected,
-        feedback_comment: comment,
-        created_at: new Date().toISOString(),
-        source: "feedback_widget",
-      }),
+      body: JSON.stringify({ rating: selected, comment }),
     }).catch(() => {});
     setSubmitted(true);
   };

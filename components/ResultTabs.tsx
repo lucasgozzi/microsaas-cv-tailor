@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { OptimizeResult } from "@/lib/openai";
 import { printAsPdf } from "@/lib/generatePdf";
+import CvRenderer from "@/components/CvRenderer";
 
 interface Props {
   result: OptimizeResult;
@@ -35,9 +36,9 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function DownloadButton({ title, content }: { title: string; content: string }) {
+function DownloadButton({ type, content }: { type: "cv" | "cover"; content: string }) {
   return (
-    <button onClick={() => printAsPdf(title, content)}
+    <button onClick={() => printAsPdf(type, content)}
       className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-500 shadow-sm transition-all hover:border-zinc-300 hover:text-zinc-800 active:scale-95"
     >
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -106,15 +107,21 @@ export default function ResultTabs({ result }: Props) {
               <p className="text-xs text-zinc-400">{active === "cv" ? "CV otimizado para ATS e para o país de destino" : "Cover letter personalizada"}</p>
               <div className="flex items-center gap-2">
                 <DownloadButton
-                  title={active === "cv" ? "Optimized Resume" : "Cover Letter"}
+                  type={active === "cv" ? "cv" : "cover"}
                   content={active === "cv" ? result.optimizedCv : result.coverLetter}
                 />
                 <CopyButton text={active === "cv" ? result.optimizedCv : result.coverLetter} />
               </div>
             </div>
-            <pre className="whitespace-pre-wrap rounded-xl border border-zinc-100 bg-zinc-50 px-5 py-4 text-sm leading-relaxed text-zinc-700 font-sans">
-              {active === "cv" ? result.optimizedCv : result.coverLetter}
-            </pre>
+            {active === "cv" ? (
+              <div className="rounded-xl border border-zinc-100 bg-zinc-50 px-6 py-5">
+                <CvRenderer content={result.optimizedCv} />
+              </div>
+            ) : (
+              <pre className="whitespace-pre-wrap rounded-xl border border-zinc-100 bg-zinc-50 px-5 py-4 text-sm leading-relaxed text-zinc-700 font-sans">
+                {result.coverLetter}
+              </pre>
+            )}
           </div>
         )}
 

@@ -65,11 +65,6 @@ export default function Home() {
 
       {/* Hero */}
       <section className="flex flex-1 flex-col items-center justify-center px-6 py-20 text-center">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 backdrop-blur-sm px-4 py-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-indigo-300 animate-pulse"/>
-          <span className="text-xs font-medium text-white/90">Desenvolvido com GPT-4o</span>
-        </div>
-
         <h1 className="max-w-3xl text-5xl font-bold tracking-tight text-white leading-[1.1] sm:text-6xl">
           Seja contratado no exterior com um currículo{" "}
           <span className="text-indigo-300">feito para vagas internacionais</span>

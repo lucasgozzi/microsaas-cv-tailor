@@ -59,7 +59,21 @@ Rules:
 - improvements: actionable, specific bullet points to strengthen the application
 - strengths: concrete strengths already present in the CV that match the job
 
-RESPOND ONLY WITH VALID JSON, no markdown, no extra text.`;
+FORMAT FOR optimizedCv — use this exact markdown structure:
+# Full Name
+email | phone | linkedin | city, country
+
+## SECTION HEADING
+**Job Title** — Company Name | Jan 2020 – Dec 2023
+- Achievement with metric or concrete result
+- Achievement with metric or concrete result
+
+Use ## for every section (Experience, Education, Skills, Languages, etc.)
+Use **bold** for job titles, degree names, and company names
+Use - for every bullet point
+Do NOT use markdown for coverLetter — write it as plain paragraphs only
+
+RESPOND ONLY WITH VALID JSON, no markdown wrapper, no extra text.`;
 
   const userPrompt = `Candidate CV:
 ${cv}

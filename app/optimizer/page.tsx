@@ -8,56 +8,6 @@ import type { OptimizeResult } from "@/lib/openai";
 import ResultTabs from "@/components/ResultTabs";
 import FeedbackWidget from "@/components/FeedbackWidget";
 
-function EmailCapture({ onSubmit }: { onSubmit: (email: string) => void }) {
-  const [email, setEmail] = useState("");
-  const [error, setError] = useState("");
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email.includes("@")) { setError("Insira um email válido."); return; }
-    localStorage.setItem("jobabroad:email", email);
-    onSubmit(email);
-  };
-
-  return (
-    <div className="mt-8 rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 p-8">
-      <div className="max-w-md mx-auto text-center">
-        <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-100">
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <path d="M2 4h14v11H2z" stroke="#6366f1" strokeWidth="1.4" strokeLinejoin="round"/>
-            <path d="M2 4l7 7 7-7" stroke="#6366f1" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </div>
-        <h3 className="text-base font-semibold text-zinc-900">Seus resultados estão prontos</h3>
-        <p className="mt-1.5 text-sm text-zinc-500">
-          Insira seu email para receber seu CV otimizado e salvar seus resultados.
-        </p>
-        <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-3 sm:flex-row">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => { setEmail(e.target.value); setError(""); }}
-            placeholder="seu@email.com"
-            className="flex-1 rounded-xl border border-zinc-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
-          />
-          <button
-            type="submit"
-            className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors"
-          >
-            Ver resultados
-          </button>
-        </form>
-        {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
-        <button
-          onClick={() => onSubmit("")}
-          className="mt-3 text-xs text-zinc-400 hover:text-zinc-600 transition-colors"
-        >
-          Pular por agora
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export default function OptimizerPage() {
   const { data: session } = useSession();
@@ -66,9 +16,9 @@ export default function OptimizerPage() {
   const [language, setLanguage] = useState<LanguageCode>("pt");
   const [targetCountry, setTargetCountry] = useState<TargetCountry>("Remote / Global");
   const [result, setResult] = useState<OptimizeResult | null>(null);
-  const [pendingResult, setPendingResult] = useState<OptimizeResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [remaining, setRemaining] = useState<number | null>(null);
 
   useEffect(() => {
     const savedCv = localStorage.getItem("jobabroad:cv");
@@ -89,7 +39,6 @@ export default function OptimizerPage() {
   const submitForm = useCallback(async (cvVal: string, jobVal: string, langVal: LanguageCode, countryVal: TargetCountry) => {
     setError("");
     setResult(null);
-    setPendingResult(null);
     setLoading(true);
 
     const res = await fetch("/api/optimize", {
@@ -103,14 +52,10 @@ export default function OptimizerPage() {
 
     if (!res.ok) { setError(data.error ?? "Erro inesperado. Tente novamente."); return; }
 
-    const emailAlreadyCaptured = localStorage.getItem("jobabroad:email");
-    if (emailAlreadyCaptured) {
-      setResult(data as OptimizeResult);
-      setTimeout(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }), 100);
-    } else {
-      setPendingResult(data as OptimizeResult);
-      setTimeout(() => document.getElementById("email-capture")?.scrollIntoView({ behavior: "smooth" }), 100);
-    }
+    if (typeof data.remaining === "number") setRemaining(data.remaining);
+
+    setResult(data as OptimizeResult);
+    setTimeout(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }), 100);
   }, []);
 
   useEffect(() => {
@@ -135,19 +80,6 @@ export default function OptimizerPage() {
   const handleGoogleSignIn = () => {
     localStorage.setItem("jobabroad:pending_submit", "1");
     signIn("google");
-  };
-
-  const handleEmailSubmit = (email: string) => {
-    if (email) {
-      fetch(process.env.NEXT_PUBLIC_SHEETBEST_URL ?? "", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, created_at: new Date().toISOString(), source: "email_capture" }),
-      }).catch(() => {});
-    }
-    setResult(pendingResult);
-    setPendingResult(null);
-    setTimeout(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }), 100);
   };
 
   const canSubmit = cv.trim().length > 50 && jobDescription.trim().length > 50;
@@ -330,15 +262,13 @@ export default function OptimizerPage() {
               </button>
             )}
             {!canSubmit && <p className="text-xs text-zinc-400">Preencha os dois campos para continuar</p>}
+            {canSubmit && session && remaining !== null && (
+              <p className="text-xs text-zinc-400">
+                {remaining === 0 ? "Último uso do dia utilizado" : `${remaining} uso${remaining !== 1 ? "s" : ""} restante${remaining !== 1 ? "s" : ""} hoje`}
+              </p>
+            )}
           </div>
         </form>
-
-        {/* Email capture */}
-        {pendingResult && (
-          <div id="email-capture">
-            <EmailCapture onSubmit={handleEmailSubmit} />
-          </div>
-        )}
 
         {/* Results */}
         {result && (
