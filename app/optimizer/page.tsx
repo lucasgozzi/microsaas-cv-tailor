@@ -55,7 +55,7 @@ export default function OptimizerPage() {
 
     if (typeof data.remaining === "number") setRemaining(data.remaining);
 
-    setResult(data as OptimizeResult);
+    setResult(data as unknown as OptimizeResult);
     setTimeout(() => document.getElementById("results")?.scrollIntoView({ behavior: "smooth" }), 100);
   }, []);
 
