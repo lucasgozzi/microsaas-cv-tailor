@@ -47,10 +47,11 @@ export default function OptimizerPage() {
       body: JSON.stringify({ cv: cvVal, jobDescription: jobVal, language: langVal, targetCountry: countryVal }),
     });
 
-    const data = await res.json();
+    let data: Record<string, unknown> = {};
+    try { data = await res.json(); } catch { /* empty body */ }
     setLoading(false);
 
-    if (!res.ok) { setError(data.error ?? "Erro inesperado. Tente novamente."); return; }
+    if (!res.ok) { setError((data.error as string) ?? "Erro inesperado. Tente novamente."); return; }
 
     if (typeof data.remaining === "number") setRemaining(data.remaining);
 

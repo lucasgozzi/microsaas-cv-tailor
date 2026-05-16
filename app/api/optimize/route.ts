@@ -9,10 +9,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Autenticação necessária." }, { status: 401 });
   }
 
-  const { remaining, allowed, limit } = await checkRateLimit(session.user.email);
-  if (!allowed) {
+  let rateLimit = { allowed: true, remaining: 99, limit: 99 };
+  try {
+    rateLimit = await checkRateLimit(session.user.email);
+  } catch {
+    // Redis unavailable — fail open, don't block the user
+  }
+  if (!rateLimit.allowed) {
     return NextResponse.json(
-      { error: `Limite diário de ${limit} usos atingido. Volte amanhã.`, limitReached: true },
+      { error: `Limite diário de ${rateLimit.limit} usos atingido. Volte amanhã.`, limitReached: true },
       { status: 429 }
     );
   }
@@ -45,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await optimizeCV(cv, jobDescription, lang, country);
-    return NextResponse.json({ ...result, remaining });
+    return NextResponse.json({ ...result, remaining: rateLimit.remaining });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro inesperado ao chamar a IA.";
     const isAuthError = message.includes("401") || message.toLowerCase().includes("api key") || message.toLowerCase().includes("authentication");
