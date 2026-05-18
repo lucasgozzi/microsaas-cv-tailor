@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { optimizeCV, LANGUAGES, TARGET_COUNTRIES, type LanguageCode, type TargetCountry } from "@/lib/openai";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { logGeneration } from "@/lib/supabase";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -50,6 +51,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await optimizeCV(cv, jobDescription, lang, country);
+    logGeneration(session.user.email, country, lang, result.matchScore).catch(() => {});
     return NextResponse.json({ ...result, remaining: rateLimit.remaining });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro inesperado ao chamar a IA.";
