@@ -113,12 +113,22 @@ function Fab({ onFeedback, showHint }: { onFeedback: () => void; showHint: boole
     const url = window.location.origin;
     if (navigator.share) {
       await navigator.share({ title: "JobAbroad.pro", text: "Otimizei meu CV para vagas internacionais com IA — grátis!", url }).catch(() => {});
+      setOpen(false);
     } else {
-      await navigator.clipboard.writeText(url);
+      try {
+        await navigator.clipboard.writeText(url);
+      } catch {
+        // fallback for non-secure context
+        const el = document.createElement("textarea");
+        el.value = url;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand("copy");
+        document.body.removeChild(el);
+      }
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => { setCopied(false); setOpen(false); }, 2000);
     }
-    setOpen(false);
   };
 
   return (
