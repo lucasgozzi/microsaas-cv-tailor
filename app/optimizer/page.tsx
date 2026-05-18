@@ -275,9 +275,10 @@ export default function OptimizerPage() {
         {result && (
           <div id="results">
             <ResultTabs result={result} />
-            <FeedbackWidget />
           </div>
         )}
+
+        <FeedbackWidget show={!!result} />
       </div>
     </main>
   );
